@@ -5,10 +5,6 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "splash": {
-      "backgroundColor": "#0f172a"
-    },
-    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "org.transvolt.batterypassport",
@@ -18,13 +14,21 @@
     },
     "android": {
       "package": "org.transvolt.batterypassport",
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA"
+      ]
     },
     "plugins": [
       [
         "expo-camera",
         {
           "cameraPermission": "Battery Passport needs the camera to scan the QR code on a battery pack."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0f172a"
         }
       ]
     ]
