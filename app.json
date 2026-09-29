@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Battery Passport",
+    "slug": "battery-passport-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#0f172a"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "org.transvolt.batterypassport",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Battery Passport needs the camera to scan the QR code on a battery pack."
+      }
+    },
+    "android": {
+      "package": "org.transvolt.batterypassport",
+      "permissions": ["CAMERA"]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Battery Passport needs the camera to scan the QR code on a battery pack."
+        }
+      ]
+    ]
+  }
+}
