@@ -1,7 +1,10 @@
+import { useIsFocused } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  KeyboardAvoidingView,
+  Linking,
   Platform,
   StyleSheet,
   Text,
@@ -12,6 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../auth/AuthContext";
 import { RootStackParamList } from "../navigation/types";
+import { extractScanCode } from "../scanCode";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Scanner">;
 
@@ -21,12 +25,28 @@ export default function ScannerScreen({ navigation }: Props) {
   const [torchOn, setTorchOn] = useState(false);
   const [manualId, setManualId] = useState("");
   const [showManualEntry, setShowManualEntry] = useState(false);
+  const isFocused = useIsFocused();
+  const [hint, setHint] = useState<string | null>(null);
   const lastScanRef = useRef<{ id: string; at: number } | null>(null);
+  // Set once a scan has navigated away, so the camera (still mounted under
+  // the pushed screen) can't push a second screen from another code in frame.
+  const lockedRef = useRef(false);
+
+  useEffect(() => {
+    if (isFocused) lockedRef.current = false;
+  }, [isFocused]);
+
+  useEffect(() => {
+    if (!hint) return;
+    const t = setTimeout(() => setHint(null), 2500);
+    return () => clearTimeout(t);
+  }, [hint]);
 
   const goToPassport = useCallback(
     (code: string) => {
       const trimmed = code.trim();
-      if (!trimmed) return;
+      if (!trimmed || lockedRef.current) return;
+      lockedRef.current = true;
       navigation.navigate("PassportDetail", { code: trimmed });
     },
     [navigation]
@@ -34,18 +54,21 @@ export default function ScannerScreen({ navigation }: Props) {
 
   const onScanned = useCallback(
     ({ data }: { data: string }) => {
+      if (lockedRef.current) return;
       const now = Date.now();
       // Debounce repeat triggers of the same code while it's still in frame.
       if (lastScanRef.current && lastScanRef.current.id === data && now - lastScanRef.current.at < 2000) {
         return;
       }
       lastScanRef.current = { id: data, at: now };
-      // Manufacturer labels encode a bare pack serial (confirmed against a
-      // real EVE Power label), but if a URL-style code is ever scanned
-      // instead (e.g. our own printed labels growing a URL scheme later),
-      // pull the trailing segment out rather than failing the lookup.
-      const urlMatch = data.match(/\/([^/?]+)\/?(?:\?.*)?$/);
-      goToPassport(data.includes("://") && urlMatch ? urlMatch[1] : data);
+      // Bare pack serial (confirmed against a real EVE Power label), or the
+      // id inside a URL-style label. Anything else isn't a battery label.
+      const code = extractScanCode(data);
+      if (!code) {
+        setHint("That QR code isn't a battery label.");
+        return;
+      }
+      goToPassport(code);
     },
     [goToPassport]
   );
@@ -58,9 +81,16 @@ export default function ScannerScreen({ navigation }: Props) {
     return (
       <SafeAreaView style={styles.permissionContainer}>
         <Text style={styles.permissionText}>Camera access is needed to scan battery QR labels.</Text>
-        <TouchableOpacity style={styles.button} onPress={requestPermission}>
-          <Text style={styles.buttonText}>Grant Camera Access</Text>
-        </TouchableOpacity>
+        {permission.canAskAgain ? (
+          <TouchableOpacity style={styles.button} onPress={requestPermission}>
+            <Text style={styles.buttonText}>Grant Camera Access</Text>
+          </TouchableOpacity>
+        ) : (
+          // Denied permanently: the system won't show the prompt again.
+          <TouchableOpacity style={styles.button} onPress={() => Linking.openSettings()}>
+            <Text style={styles.buttonText}>Open Settings to Allow Camera</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity style={styles.linkButton} onPress={() => setShowManualEntry(true)}>
           <Text style={styles.linkText}>Enter passport ID manually instead</Text>
         </TouchableOpacity>
@@ -78,9 +108,14 @@ export default function ScannerScreen({ navigation }: Props) {
         facing="back"
         enableTorch={torchOn}
         barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-        onBarcodeScanned={onScanned}
+        onBarcodeScanned={isFocused ? onScanned : undefined}
       />
 
+      <KeyboardAvoidingView
+        style={StyleSheet.absoluteFill}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        pointerEvents="box-none"
+      >
       <SafeAreaView style={styles.overlay} pointerEvents="box-none">
         <View style={styles.topBar}>
           <Text style={styles.projectLabel}>{auth.project?.name ?? ""}</Text>
@@ -99,7 +134,7 @@ export default function ScannerScreen({ navigation }: Props) {
 
         <View style={styles.frameHint}>
           <View style={styles.frame} />
-          <Text style={styles.hintText}>Point the camera at the battery's QR label</Text>
+          <Text style={styles.hintText}>{hint ?? "Point the camera at the battery's QR label"}</Text>
         </View>
 
         <View style={styles.bottomBar}>
@@ -113,6 +148,7 @@ export default function ScannerScreen({ navigation }: Props) {
           )}
         </View>
       </SafeAreaView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -130,7 +166,7 @@ function ManualEntry({
     <View style={styles.manualEntryRow}>
       <TextInput
         style={styles.manualInput}
-        placeholder="Pack serial number"
+        placeholder="Pack serial or passport ID"
         placeholderTextColor="#94a3b8"
         value={value}
         onChangeText={onChange}

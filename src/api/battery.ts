@@ -1,6 +1,6 @@
 import { BOOTSTRAP_PROJECT_SLUG } from "../config";
 import { AssignPackPayload, BatteryPassport, Project, TokenPair, UsageHistoryEntry } from "../types";
-import { apiRequest, buildUrl } from "./client";
+import { ApiError, apiRequest, buildUrl } from "./client";
 
 export async function login(baseUrl: string, username: string, password: string): Promise<TokenPair> {
   return apiRequest<TokenPair>(buildUrl(baseUrl, BOOTSTRAP_PROJECT_SLUG, "/auth/token/"), {
@@ -72,4 +72,23 @@ export async function listUsageHistory(
     buildUrl(baseUrl, projectSlug, `/master/${batteryId}/usage/`),
     { accessToken }
   );
+}
+
+/**
+ * Settings "Test connection": checks that baseUrl actually serves the Battery
+ * Passport API (Ninja publishes its schema unauthenticated at /openapi.json),
+ * so a wrong URL or an API that isn't deployed there is caught before login.
+ */
+export async function testConnection(baseUrl: string): Promise<{ ok: boolean; message: string }> {
+  try {
+    const schema = await apiRequest<{ paths?: Record<string, unknown> }>(
+      buildUrl(baseUrl, BOOTSTRAP_PROJECT_SLUG, "/openapi.json")
+    );
+    const hasLogin = !!schema && !!schema.paths && Object.keys(schema.paths).some((p) => p.includes("/auth/token"));
+    return hasLogin
+      ? { ok: true, message: "Connected — Battery Passport API found." }
+      : { ok: false, message: "Reached a server, but it doesn't expose the Battery Passport API." };
+  } catch (err) {
+    return { ok: false, message: err instanceof ApiError ? err.message : "Could not reach the server." };
+  }
 }

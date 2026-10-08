@@ -6,9 +6,34 @@ const SCANS_KEY = "battery-passport:scan-history";
 const CACHE_KEY = "battery-passport:passport-cache";
 const ALIAS_KEY = "battery-passport:passport-cache-aliases";
 
+// Stored JSON can be corrupt (interrupted write, app update); treat that as
+// "nothing stored" rather than letting a parse error break screens.
+function safeParse<T>(raw: string | null, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? (parsed as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function getScanHistory(): Promise<ScanHistoryEntry[]> {
-  const raw = await AsyncStorage.getItem(SCANS_KEY);
-  return raw ? (JSON.parse(raw) as ScanHistoryEntry[]) : [];
+  const parsed = safeParse<ScanHistoryEntry[]>(await AsyncStorage.getItem(SCANS_KEY), []);
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+/**
+ * Wipes everything cached on this device (scan history + offline passports).
+ * Called on logout, project switch and server change, so another user or
+ * project never sees the previous one's batteries.
+ */
+export async function clearAllLocalData(): Promise<void> {
+  await Promise.all([
+    AsyncStorage.removeItem(SCANS_KEY),
+    AsyncStorage.removeItem(CACHE_KEY),
+    AsyncStorage.removeItem(ALIAS_KEY),
+  ]);
 }
 
 export async function addScanHistoryEntry(entry: ScanHistoryEntry): Promise<void> {
@@ -47,14 +72,14 @@ function aliasesFor(passport: BatteryPassport): string[] {
 // that can resolve to a battery (not just battery_passport_id), so a re-scan
 // of the same physical label works offline too.
 export async function cachePassport(passport: BatteryPassport): Promise<void> {
-  const passportId = String(passport.battery_passport_id);
+  const passportId = String(passport.battery_passport_id ?? `id-${passport.id}`);
 
   const [rawCache, rawAliases] = await Promise.all([
     AsyncStorage.getItem(CACHE_KEY),
     AsyncStorage.getItem(ALIAS_KEY),
   ]);
-  const cache: Record<string, CachedPassport> = rawCache ? JSON.parse(rawCache) : {};
-  const aliases: Record<string, string> = rawAliases ? JSON.parse(rawAliases) : {};
+  const cache = safeParse<Record<string, CachedPassport>>(rawCache, {});
+  const aliases = safeParse<Record<string, string>>(rawAliases, {});
 
   cache[passportId] = { passport, cachedAt: new Date().toISOString() };
   for (const alias of aliasesFor(passport)) {
@@ -81,8 +106,8 @@ export async function getCachedPassport(code: string): Promise<CachedPassport | 
     AsyncStorage.getItem(ALIAS_KEY),
   ]);
   if (!rawCache) return null;
-  const cache: Record<string, CachedPassport> = JSON.parse(rawCache);
-  const aliases: Record<string, string> = rawAliases ? JSON.parse(rawAliases) : {};
+  const cache = safeParse<Record<string, CachedPassport>>(rawCache, {});
+  const aliases = safeParse<Record<string, string>>(rawAliases, {});
 
   const passportId = aliases[normalizeCode(code)] ?? code;
   return cache[passportId] ?? null;

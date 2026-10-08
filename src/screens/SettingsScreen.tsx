@@ -1,6 +1,8 @@
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import React, { useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { testConnection } from "../api/battery";
+import { normalizeBaseUrl } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { DEFAULT_BASE_URL } from "../config";
 import { RootStackParamList } from "../navigation/types";
@@ -11,10 +13,43 @@ export default function SettingsScreen({ navigation }: Props) {
   const auth = useAuth();
   const [url, setUrl] = useState(auth.baseUrl);
 
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
   const save = async () => {
-    if (!url.trim()) return;
-    await auth.setBaseUrl(url);
-    Alert.alert("Saved", "API base URL updated.");
+    const normalized = normalizeBaseUrl(url);
+    if (!normalized) {
+      Alert.alert("Invalid URL", "Enter a full address starting with http:// or https://, e.g. https://voltrack.transvolt.org");
+      return;
+    }
+    const apply = async () => {
+      await auth.setBaseUrl(normalized);
+      setUrl(normalized);
+      setTestResult(null);
+      // If this changed the server while signed in, setBaseUrl signed out and
+      // the navigator is already back on Login.
+      if (!auth.accessToken || normalized === auth.baseUrl) Alert.alert("Saved", "API base URL updated.");
+    };
+    if (auth.accessToken && normalized !== auth.baseUrl) {
+      Alert.alert("Change server?", "Your sign-in belongs to the current server, so you'll be signed out.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Change & sign out", style: "destructive", onPress: apply },
+      ]);
+      return;
+    }
+    await apply();
+  };
+
+  const runTest = async () => {
+    const normalized = normalizeBaseUrl(url);
+    if (!normalized) {
+      setTestResult({ ok: false, message: "Enter a full http:// or https:// address first." });
+      return;
+    }
+    setTesting(true);
+    setTestResult(null);
+    setTestResult(await testConnection(normalized));
+    setTesting(false);
   };
 
   const resetDefault = () => setUrl(DEFAULT_BASE_URL);
@@ -25,10 +60,8 @@ export default function SettingsScreen({ navigation }: Props) {
       {
         text: "Log out",
         style: "destructive",
-        onPress: async () => {
-          await auth.logout();
-          navigation.reset({ index: 0, routes: [{ name: "Login" }] });
-        },
+        // Signing out flips the navigator back to Login by itself.
+        onPress: () => auth.logout(),
       },
     ]);
   };
@@ -54,6 +87,14 @@ export default function SettingsScreen({ navigation }: Props) {
       <TouchableOpacity style={styles.linkButton} onPress={resetDefault}>
         <Text style={styles.linkText}>Reset to default</Text>
       </TouchableOpacity>
+      <TouchableOpacity style={styles.linkButton} onPress={runTest} disabled={testing}>
+        {testing ? <ActivityIndicator /> : <Text style={styles.linkText}>Test connection</Text>}
+      </TouchableOpacity>
+      {testResult && (
+        <Text style={{ color: testResult.ok ? "#15803d" : "#dc2626", fontSize: 13, marginTop: 8 }}>
+          {testResult.message}
+        </Text>
+      )}
 
       {auth.project && (
         <View style={styles.section}>

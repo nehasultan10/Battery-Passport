@@ -16,6 +16,7 @@ import { assignPack } from "../api/battery";
 import { ApiError } from "../api/client";
 import { useAuth, withAuthRetry } from "../auth/AuthContext";
 import { RootStackParamList } from "../navigation/types";
+import { normalizeRegistration } from "../scanCode";
 import { AssignPackPayload } from "../types";
 
 type Props = NativeStackScreenProps<RootStackParamList, "MapBattery">;
@@ -34,7 +35,7 @@ export default function MapBatteryScreen({ route, navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (force: boolean) => {
-    if (!registrationNumber.trim()) {
+    if (!normalizeRegistration(registrationNumber)) {
       setError("Vehicle registration number is required.");
       return;
     }
@@ -43,7 +44,7 @@ export default function MapBatteryScreen({ route, navigation }: Props) {
     setSubmitting(true);
     setError(null);
     const payload: AssignPackPayload = {
-      registration_number: registrationNumber.trim(),
+      registration_number: normalizeRegistration(registrationNumber),
       pack_slot: packSlot,
       serial: code,
       model: model.trim() || undefined,

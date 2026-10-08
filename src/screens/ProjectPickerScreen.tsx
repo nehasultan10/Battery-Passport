@@ -20,7 +20,7 @@ export default function ProjectPickerScreen({ navigation }: Props) {
     setError(null);
     try {
       const result = await withAuthRetry(auth, (token) => listProjects(auth.baseUrl, token));
-      setProjects(result);
+      setProjects(Array.isArray(result) ? result : []);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not load projects.");
     } finally {
@@ -33,8 +33,11 @@ export default function ProjectPickerScreen({ navigation }: Props) {
   }, [load]);
 
   const choose = async (project: Project) => {
+    const switching = !!auth.project;
     await auth.selectProject(project);
-    navigation.reset({ index: 0, routes: [{ name: "Scanner" }] });
+    // First selection: the navigator swaps to the Scanner group by itself.
+    // Switching from Settings: we're already inside that group, so reset it.
+    if (switching) navigation.reset({ index: 0, routes: [{ name: "Scanner" }] });
   };
 
   if (loading) {

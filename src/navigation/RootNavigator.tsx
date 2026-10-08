@@ -25,24 +25,40 @@ export default function RootNavigator() {
     );
   }
 
-  // Deep-link entry (a scanned QR opening the app directly) always routes
-  // through Scanner's manual-entry/back path rather than a bespoke deep-link
-  // screen — the initial route below only decides where a *cold app open*
-  // lands, based on how far through auth/project-selection this device is.
-  let initialRoute: keyof RootStackParamList = "Login";
-  if (auth.accessToken && auth.project) initialRoute = "Scanner";
-  else if (auth.accessToken) initialRoute = "ProjectPicker";
+  // Which screens exist is driven by auth state, so signing out (or an expired
+  // session) lands on Login automatically and a project-less session can only
+  // reach the picker - no manual navigation.reset() needed for those cases.
+  const signedIn = !!auth.accessToken;
+  const hasProject = signedIn && !!auth.project;
+
+  // Keyed by group so crossing a boundary (logout, session expiry, project
+  // chosen) remounts the stack at that group's first screen instead of
+  // leaving a stale stack behind (e.g. Settings with no Login under it).
+  const groupKey = !signedIn ? "signed-out" : !hasProject ? "no-project" : "ready";
 
   return (
-    <Stack.Navigator initialRouteName={initialRoute}>
-      <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="ProjectPicker" component={ProjectPickerScreen} options={{ title: "Select Project" }} />
-      <Stack.Screen name="Scanner" component={ScannerScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="PassportDetail" component={PassportDetailScreen} options={{ title: "Battery Passport" }} />
-      <Stack.Screen name="MapBattery" component={MapBatteryScreen} options={{ title: "Map Battery" }} />
-      <Stack.Screen name="UsageHistory" component={UsageHistoryScreen} options={{ title: "Usage History" }} />
-      <Stack.Screen name="ScanHistory" component={ScanHistoryScreen} options={{ title: "Scan History" }} />
-      <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Settings" }} />
+    <Stack.Navigator key={groupKey}>
+      {!signedIn ? (
+        <>
+          <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Settings" }} />
+        </>
+      ) : !hasProject ? (
+        <>
+          <Stack.Screen name="ProjectPicker" component={ProjectPickerScreen} options={{ title: "Select Project" }} />
+          <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Settings" }} />
+        </>
+      ) : (
+        <>
+          <Stack.Screen name="Scanner" component={ScannerScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="PassportDetail" component={PassportDetailScreen} options={{ title: "Battery Passport" }} />
+          <Stack.Screen name="MapBattery" component={MapBatteryScreen} options={{ title: "Map Battery" }} />
+          <Stack.Screen name="UsageHistory" component={UsageHistoryScreen} options={{ title: "Usage History" }} />
+          <Stack.Screen name="ScanHistory" component={ScanHistoryScreen} options={{ title: "Scan History" }} />
+          <Stack.Screen name="ProjectPicker" component={ProjectPickerScreen} options={{ title: "Select Project" }} />
+          <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Settings" }} />
+        </>
+      )}
     </Stack.Navigator>
   );
 }

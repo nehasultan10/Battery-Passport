@@ -2,11 +2,12 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { resolveScan } from "../api/battery";
-import { ApiError } from "../api/client";
+import { ApiError, isOfflineLike } from "../api/client";
 import { useAuth, withAuthRetry } from "../auth/AuthContext";
 import Accordion from "../components/Accordion";
 import FieldRow from "../components/FieldRow";
 import { RootStackParamList } from "../navigation/types";
+import { looksLikeSerial } from "../scanCode";
 import { formatFieldLabel, formatFieldValue, HEADLINE_FIELDS, PASSPORT_SECTIONS } from "../passportSections";
 import { addScanHistoryEntry, cachePassport, getCachedPassport } from "../storage/scanHistory";
 import { BatteryPassport } from "../types";
@@ -34,21 +35,37 @@ export default function PassportDetailScreen({ route, navigation }: Props) {
         resolveScan(auth.baseUrl, auth.project!.slug, token, code)
       );
       setState({ status: "ready", passport, cachedAt: null });
-      await cachePassport(passport);
-      await addScanHistoryEntry({
-        passportId: String(passport.battery_passport_id),
-        registrationNumber: passport.registration_number,
-        model: (passport.model as string | null) ?? null,
-        scannedAt: new Date().toISOString(),
-      });
+      // Local bookkeeping must never turn a successful live read into an
+      // error screen, so storage failures are swallowed here.
+      try {
+        await cachePassport(passport);
+        if (passport.battery_passport_id) {
+          await addScanHistoryEntry({
+            passportId: String(passport.battery_passport_id),
+            registrationNumber: passport.registration_number,
+            model: (passport.model as string | null) ?? null,
+            scannedAt: new Date().toISOString(),
+          });
+        }
+      } catch (storageErr) {
+        console.warn("Could not save passport locally", storageErr);
+      }
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         setState({ status: "error", message: `No battery found for this code.`, notFound: true });
         return;
       }
-      // Network/server error — fall back to the last cached copy, if any,
-      // rather than a dead end (PRD: "cached as of [timestamp]" banner).
-      const cached = await getCachedPassport(code);
+      // Only genuine connectivity/server failures fall back to the cached
+      // copy (PRD: "cached as of [timestamp]" banner) - never auth or
+      // permission errors, which a stale copy would paper over.
+      let cached = null;
+      if (isOfflineLike(err)) {
+        try {
+          cached = await getCachedPassport(code);
+        } catch {
+          cached = null;
+        }
+      }
       if (cached) {
         setState({ status: "ready", passport: cached.passport, cachedAt: cached.cachedAt });
       } else {
@@ -78,7 +95,9 @@ export default function PassportDetailScreen({ route, navigation }: Props) {
       <View style={styles.center}>
         <Text style={styles.errorTitle}>{state.notFound ? "Battery not found" : "Couldn't load passport"}</Text>
         <Text style={styles.errorMessage}>{state.message}</Text>
-        {state.notFound ? (
+        {state.notFound && !looksLikeSerial(code) ? (
+          <Text style={styles.errorMessage}>That doesn't look like a valid battery serial, so it can't be mapped.</Text>
+        ) : state.notFound ? (
           <TouchableOpacity
             style={styles.retryButton}
             onPress={() => navigation.replace("MapBattery", { code })}

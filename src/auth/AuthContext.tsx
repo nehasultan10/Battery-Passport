@@ -1,8 +1,9 @@
 import * as SecureStore from "expo-secure-store";
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "../api/client";
 import { login as apiLogin, refreshAccessToken } from "../api/battery";
 import { DEFAULT_BASE_URL } from "../config";
+import { clearAllLocalData } from "../storage/scanHistory";
 import { Project } from "../types";
 
 // SecureStore keys may only contain alphanumerics, ".", "-" and "_" — no ":".
@@ -19,6 +20,7 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   project: Project | null;
+  /** Saves a new server URL; if it differs while signed in, signs out (tokens belong to the old server). */
   setBaseUrl: (url: string) => Promise<void>;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -59,11 +61,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  const setBaseUrl = useCallback(async (url: string) => {
-    const trimmed = url.trim().replace(/\/+$/, "");
-    setBaseUrlState(trimmed);
-    await SecureStore.setItemAsync(KEYS.baseUrl, trimmed);
+  const logout = useCallback(async () => {
+    setAccessToken(null);
+    setRefreshToken(null);
+    setProject(null);
+    await Promise.all([
+      SecureStore.deleteItemAsync(KEYS.accessToken),
+      SecureStore.deleteItemAsync(KEYS.refreshToken),
+      SecureStore.deleteItemAsync(KEYS.project),
+      // Cached passports / scan history belong to the signed-in user and
+      // project; never leave them behind for whoever uses the phone next.
+      clearAllLocalData(),
+    ]);
   }, []);
+
+  const setBaseUrl = useCallback(
+    async (url: string) => {
+      const trimmed = url.trim().replace(/\/+$/, "");
+      const changed = trimmed !== baseUrl;
+      setBaseUrlState(trimmed);
+      await SecureStore.setItemAsync(KEYS.baseUrl, trimmed);
+      if (changed && (accessToken || refreshToken)) await logout();
+    },
+    [baseUrl, accessToken, refreshToken, logout]
+  );
 
   const login = useCallback(
     async (username: string, password: string) => {
@@ -78,33 +99,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [baseUrl]
   );
 
-  const logout = useCallback(async () => {
-    setAccessToken(null);
-    setRefreshToken(null);
-    setProject(null);
-    await Promise.all([
-      SecureStore.deleteItemAsync(KEYS.accessToken),
-      SecureStore.deleteItemAsync(KEYS.refreshToken),
-      SecureStore.deleteItemAsync(KEYS.project),
-    ]);
-  }, []);
+  const selectProject = useCallback(
+    async (next: Project) => {
+      // Different project => different batteries; drop what the previous one cached.
+      if (project && project.slug !== next.slug) await clearAllLocalData();
+      setProject(next);
+      await SecureStore.setItemAsync(KEYS.project, JSON.stringify(next));
+    },
+    [project]
+  );
 
-  const selectProject = useCallback(async (next: Project) => {
-    setProject(next);
-    await SecureStore.setItemAsync(KEYS.project, JSON.stringify(next));
-  }, []);
+  // One refresh at a time: several screens failing with 401 together must not
+  // each burn the refresh token.
+  const refreshInFlight = useRef<Promise<string> | null>(null);
 
   const ensureAccessToken = useCallback(async () => {
     if (!refreshToken) throw new ApiError(401, "Not logged in.");
-    // Access tokens are short-lived (30 min, see battery/auth.py). Rather than
-    // tracking expiry client-side, refresh unconditionally here and let
-    // callers use the result immediately — one extra round trip, but it
-    // avoids clock-skew bugs from trying to predict expiry locally.
-    const refreshed = await refreshAccessToken(baseUrl, refreshToken);
-    setAccessToken(refreshed.access);
-    await SecureStore.setItemAsync(KEYS.accessToken, refreshed.access);
-    return refreshed.access;
-  }, [baseUrl, refreshToken]);
+    if (refreshInFlight.current) return refreshInFlight.current;
+
+    const run = (async () => {
+      try {
+        const refreshed = await refreshAccessToken(baseUrl, refreshToken);
+        setAccessToken(refreshed.access);
+        await SecureStore.setItemAsync(KEYS.accessToken, refreshed.access);
+        return refreshed.access;
+      } catch (err) {
+        // Refresh token expired/revoked (14 days, or account disabled): the
+        // session is over. Signing out flips the navigator back to Login.
+        if (err instanceof ApiError && err.status === 401) {
+          await logout();
+          throw new ApiError(401, "Your session has expired. Please sign in again.");
+        }
+        throw err;
+      } finally {
+        refreshInFlight.current = null;
+      }
+    })();
+    refreshInFlight.current = run;
+    return run;
+  }, [baseUrl, refreshToken, logout]);
 
   const value = useMemo<AuthState>(
     () => ({

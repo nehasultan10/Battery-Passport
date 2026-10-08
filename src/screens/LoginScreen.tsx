@@ -24,12 +24,13 @@ export default function LoginScreen({ navigation }: Props) {
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async () => {
-    if (!username || !password) return;
+    if (!username.trim() || !password) return;
     setSubmitting(true);
     setError(null);
     try {
-      await auth.login(username, password);
-      navigation.reset({ index: 0, routes: [{ name: "ProjectPicker" }] });
+      await auth.login(username.trim(), password);
+      // No navigation here: signing in changes the auth state, which swaps
+      // the navigator over to the project picker (see RootNavigator).
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not sign in. Check your connection.");
     } finally {
