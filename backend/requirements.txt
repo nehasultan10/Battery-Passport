@@ -1,0 +1,6 @@
+Django==5.2.7
+django-ninja==1.4.3
+PyJWT==2.10.1
+requests==2.32.5
+psycopg[binary]==3.2.10
+gunicorn
