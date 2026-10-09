@@ -39,14 +39,12 @@ export default function PassportDetailScreen({ route, navigation }: Props) {
       // error screen, so storage failures are swallowed here.
       try {
         await cachePassport(passport);
-        if (passport.battery_passport_id) {
-          await addScanHistoryEntry({
-            passportId: String(passport.battery_passport_id),
-            registrationNumber: passport.registration_number,
-            model: (passport.model as string | null) ?? null,
-            scannedAt: new Date().toISOString(),
-          });
-        }
+        await addScanHistoryEntry({
+          passportId: passport.battery_serial_number,
+          registrationNumber: passport.registration_number,
+          model: (passport.model as string | null) ?? null,
+          scannedAt: new Date().toISOString(),
+        });
       } catch (storageErr) {
         console.warn("Could not save passport locally", storageErr);
       }
@@ -140,18 +138,6 @@ export default function PassportDetailScreen({ route, navigation }: Props) {
         ))}
       </View>
 
-      <TouchableOpacity
-        style={styles.historyButton}
-        onPress={() =>
-          navigation.navigate("UsageHistory", {
-            batteryId: passport.id,
-            registrationNumber: passport.registration_number,
-          })
-        }
-      >
-        <Text style={styles.historyButtonText}>View Usage History</Text>
-      </TouchableOpacity>
-
       {PASSPORT_SECTIONS.map((section, index) => (
         <Accordion key={section.title} title={section.title} defaultOpen={index === 0}>
           {section.fields.map((field) => (
@@ -188,14 +174,6 @@ const styles = StyleSheet.create({
   },
   headlineLabel: { fontSize: 11, color: "#64748b", marginBottom: 2 },
   headlineValue: { fontSize: 14, fontWeight: "600", color: "#0f172a" },
-  historyButton: {
-    backgroundColor: "#2563eb",
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  historyButtonText: { color: "#fff", fontWeight: "600" },
   errorTitle: { fontSize: 17, fontWeight: "700", color: "#0f172a", marginBottom: 6 },
   errorMessage: { fontSize: 14, color: "#64748b", textAlign: "center" },
   retryButton: { marginTop: 16, backgroundColor: "#2563eb", borderRadius: 8, paddingHorizontal: 24, paddingVertical: 10 },

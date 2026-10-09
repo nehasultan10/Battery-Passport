@@ -19,7 +19,7 @@ export default function SettingsScreen({ navigation }: Props) {
   const save = async () => {
     const normalized = normalizeBaseUrl(url);
     if (!normalized) {
-      Alert.alert("Invalid URL", "Enter a full address starting with http:// or https://, e.g. https://voltrack.transvolt.org");
+      Alert.alert("Invalid URL", "Enter a full address starting with http:// or https://, e.g. https://passport.transvolt.org");
       return;
     }
     const apply = async () => {
@@ -79,7 +79,7 @@ export default function SettingsScreen({ navigation }: Props) {
         placeholder={DEFAULT_BASE_URL}
       />
       <Text style={styles.hint}>
-        Point this at your Voltrack server — production by default, or a local/dev/ngrok URL for testing.
+        Point this at the Battery Passport server — production by default, or a local/dev/ngrok URL for testing.
       </Text>
       <TouchableOpacity style={styles.button} onPress={save}>
         <Text style={styles.buttonText}>Save</Text>

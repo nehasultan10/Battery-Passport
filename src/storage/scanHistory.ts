@@ -51,12 +51,12 @@ function normalizeCode(code: string): string {
   return code.trim().toLowerCase();
 }
 
-// battery_pack_a/b/c + battery_passport_id are all values the backend's
-// resolve_battery_scan will match a scan against (see battery/api.py), so
-// any of them scanned later should hit this same cached record offline.
+// The scanned serial and the vehicle's battery_pack_a/b/c are all values that
+// identify this record, so any of them scanned later should hit the same
+// cached copy offline.
 function aliasesFor(passport: BatteryPassport): string[] {
   const candidates = [
-    passport.battery_passport_id,
+    passport.battery_serial_number,
     passport.battery_pack_a,
     passport.battery_pack_b,
     passport.battery_pack_c,
@@ -69,10 +69,10 @@ function aliasesFor(passport: BatteryPassport): string[] {
 // Read-only, last-N-passports cache so a technician in a dead zone still sees
 // the last known record — surfaced with a "cached as of" banner in the UI so
 // it's never mistaken for a live read (PRD section 7). Indexed by every code
-// that can resolve to a battery (not just battery_passport_id), so a re-scan
+// that can resolve to a battery (not just the scanned serial), so a re-scan
 // of the same physical label works offline too.
 export async function cachePassport(passport: BatteryPassport): Promise<void> {
-  const passportId = String(passport.battery_passport_id ?? `id-${passport.id}`);
+  const passportId = passport.battery_serial_number;
 
   const [rawCache, rawAliases] = await Promise.all([
     AsyncStorage.getItem(CACHE_KEY),

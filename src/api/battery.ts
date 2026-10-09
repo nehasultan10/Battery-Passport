@@ -1,33 +1,51 @@
-import { BOOTSTRAP_PROJECT_SLUG } from "../config";
-import { AssignPackPayload, BatteryPassport, Project, TokenPair, UsageHistoryEntry } from "../types";
-import { ApiError, apiRequest, buildUrl } from "./client";
+import { API_PREFIX } from "../config";
+import { AssignPackPayload, BatteryPassport, Project, TokenPair } from "../types";
+import { ApiError, apiRequest, buildAuthUrl, buildUrl } from "./client";
 
 export async function login(baseUrl: string, username: string, password: string): Promise<TokenPair> {
-  return apiRequest<TokenPair>(buildUrl(baseUrl, BOOTSTRAP_PROJECT_SLUG, "/auth/token/"), {
+  return apiRequest<TokenPair>(buildAuthUrl(baseUrl, "/login/"), {
     method: "POST",
     body: { username, password },
   });
 }
 
-export async function refreshAccessToken(baseUrl: string, refresh: string): Promise<{ access: string; expires_in: number }> {
-  return apiRequest(buildUrl(baseUrl, BOOTSTRAP_PROJECT_SLUG, "/auth/token/refresh/"), {
+/** Refresh tokens rotate: the response carries a new refresh token and the old one stops working. */
+export async function refreshSession(baseUrl: string, refresh: string): Promise<TokenPair> {
+  return apiRequest<TokenPair>(buildAuthUrl(baseUrl, "/refresh/"), {
     method: "POST",
     body: { refresh },
   });
 }
 
+/** Revokes the refresh token on the server. Best effort: logging out locally never depends on it. */
+export async function serverLogout(baseUrl: string, refresh: string): Promise<void> {
+  await apiRequest(buildAuthUrl(baseUrl, "/logout/"), { method: "POST", body: { refresh } });
+}
+
 export async function listProjects(baseUrl: string, accessToken: string): Promise<Project[]> {
-  return apiRequest<Project[]>(buildUrl(baseUrl, BOOTSTRAP_PROJECT_SLUG, "/auth/projects/"), {
-    accessToken,
-  });
+  return apiRequest<Project[]>(buildAuthUrl(baseUrl, "/projects/"), { accessToken });
+}
+
+interface ScanResponse {
+  serial: string;
+  vehicle: Record<string, unknown>;
+}
+
+function toPassport({ serial, vehicle }: ScanResponse): BatteryPassport {
+  return {
+    id: 0,
+    model: null,
+    depot: null,
+    status: null,
+    ...vehicle,
+    battery_serial_number: serial,
+    registration_number: String(vehicle.registration_number ?? ""),
+  };
 }
 
 /**
- * Resolves whatever a QR scan decoded to. Real manufacturer labels (verified
- * against a photographed EVE Power pack label) encode that pack's own S/N,
- * not a Voltrack-generated ID — the backend matches that against
- * battery_pack_a/b/c first, falling back to battery_passport_id for labels
- * printed via the admin's own QR button. See battery/api.py resolve_battery_scan.
+ * Resolves a scanned number within the selected project's depot. 404 means it
+ * isn't assigned to a vehicle yet (the app then offers the map screen).
  */
 export async function resolveScan(
   baseUrl: string,
@@ -35,19 +53,17 @@ export async function resolveScan(
   accessToken: string,
   code: string
 ): Promise<BatteryPassport> {
-  return apiRequest<BatteryPassport>(
-    buildUrl(baseUrl, projectSlug, `/master/scan/?code=${encodeURIComponent(code)}`),
-    { accessToken }
+  return toPassport(
+    await apiRequest<ScanResponse>(buildUrl(baseUrl, projectSlug, `/scan/?code=${encodeURIComponent(code)}`), {
+      accessToken,
+    })
   );
 }
 
 /**
- * Attaches a scanned serial that resolveScan couldn't find to a vehicle —
- * either an existing one (by registration_number) or a newly created row.
- * Throws ApiError(409, ...) if the serial's already recorded elsewhere or
- * the target slot already holds a different serial; retry with
- * `{ ...payload, force: true }` once the tech has confirmed the overwrite.
- * See battery/api.py assign_pack_to_vehicle.
+ * Assigns a scanned serial to a vehicle. Throws ApiError(409, ...) if the
+ * serial is already on another vehicle or the pack slot is taken; retry with
+ * `force: true` once the tech has confirmed the overwrite.
  */
 export async function assignPack(
   baseUrl: string,
@@ -55,36 +71,23 @@ export async function assignPack(
   accessToken: string,
   payload: AssignPackPayload
 ): Promise<BatteryPassport> {
-  return apiRequest<BatteryPassport>(buildUrl(baseUrl, projectSlug, "/master/assign-pack/"), {
-    method: "POST",
-    accessToken,
-    body: payload,
-  });
-}
-
-export async function listUsageHistory(
-  baseUrl: string,
-  projectSlug: string,
-  accessToken: string,
-  batteryId: number
-): Promise<UsageHistoryEntry[]> {
-  return apiRequest<UsageHistoryEntry[]>(
-    buildUrl(baseUrl, projectSlug, `/master/${batteryId}/usage/`),
-    { accessToken }
+  return toPassport(
+    await apiRequest<ScanResponse>(buildUrl(baseUrl, projectSlug, "/mappings/"), {
+      method: "POST",
+      accessToken,
+      body: payload,
+    })
   );
 }
 
 /**
  * Settings "Test connection": checks that baseUrl actually serves the Battery
- * Passport API (Ninja publishes its schema unauthenticated at /openapi.json),
- * so a wrong URL or an API that isn't deployed there is caught before login.
+ * Passport API (Ninja publishes its schema unauthenticated at /openapi.json).
  */
 export async function testConnection(baseUrl: string): Promise<{ ok: boolean; message: string }> {
   try {
-    const schema = await apiRequest<{ paths?: Record<string, unknown> }>(
-      buildUrl(baseUrl, BOOTSTRAP_PROJECT_SLUG, "/openapi.json")
-    );
-    const hasLogin = !!schema && !!schema.paths && Object.keys(schema.paths).some((p) => p.includes("/auth/token"));
+    const schema = await apiRequest<{ paths?: Record<string, unknown> }>(`${baseUrl.replace(/\/+$/, "")}${API_PREFIX}/openapi.json`);
+    const hasLogin = !!schema && !!schema.paths && Object.keys(schema.paths).some((p) => p.includes("/auth/login"));
     return hasLogin
       ? { ok: true, message: "Connected — Battery Passport API found." }
       : { ok: false, message: "Reached a server, but it doesn't expose the Battery Passport API." };

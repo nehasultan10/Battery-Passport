@@ -72,7 +72,7 @@ export default function ProjectPickerScreen({ navigation }: Props) {
       <Text style={styles.heading}>Choose a project</Text>
       <FlatList
         data={projects}
-        keyExtractor={(item) => item.code}
+        keyExtractor={(item) => item.slug}
         renderItem={({ item }) => (
           <TouchableOpacity style={styles.row} onPress={() => choose(item)}>
             <Text style={styles.rowText}>{item.name}</Text>

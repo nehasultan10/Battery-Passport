@@ -20,9 +20,16 @@ export function isOfflineLike(err: unknown): boolean {
 
 export const REQUEST_TIMEOUT_MS = 15000;
 
+/** Project-scoped route: <base>/api/<project>/<path>. */
 export function buildUrl(baseUrl: string, projectSlug: string, path: string): string {
   const trimmedBase = baseUrl.replace(/\/+$/, "");
-  return `${trimmedBase}/${projectSlug}${API_PREFIX}${path}`;
+  return `${trimmedBase}${API_PREFIX}/${projectSlug}${path}`;
+}
+
+/** Project-agnostic auth route: <base>/api/auth/<path>. */
+export function buildAuthUrl(baseUrl: string, path: string): string {
+  const trimmedBase = baseUrl.replace(/\/+$/, "");
+  return `${trimmedBase}${API_PREFIX}/auth${path}`;
 }
 
 /** Returns a clean http(s) base URL without trailing slashes, or null if it isn't one. */

@@ -29,8 +29,6 @@ export default function MapBatteryScreen({ route, navigation }: Props) {
 
   const [registrationNumber, setRegistrationNumber] = useState("");
   const [packSlot, setPackSlot] = useState<AssignPackPayload["pack_slot"]>("a");
-  const [model, setModel] = useState("");
-  const [chassisNo, setChassisNo] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,9 +45,6 @@ export default function MapBatteryScreen({ route, navigation }: Props) {
       registration_number: normalizeRegistration(registrationNumber),
       pack_slot: packSlot,
       serial: code,
-      model: model.trim() || undefined,
-      chassis_no: chassisNo.trim() || undefined,
-      depot: auth.project.code,
       force,
     };
 
@@ -107,12 +102,6 @@ export default function MapBatteryScreen({ route, navigation }: Props) {
             </TouchableOpacity>
           ))}
         </View>
-
-        <Text style={styles.label}>Model (optional)</Text>
-        <TextInput style={styles.input} value={model} onChangeText={setModel} placeholder="Vehicle model" />
-
-        <Text style={styles.label}>Chassis No (optional)</Text>
-        <TextInput style={styles.input} value={chassisNo} onChangeText={setChassisNo} placeholder="Chassis number" />
 
         <Text style={styles.label}>Depot / Project</Text>
         <View style={styles.readonlyBox}>

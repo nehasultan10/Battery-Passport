@@ -1,7 +1,7 @@
 import * as SecureStore from "expo-secure-store";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "../api/client";
-import { login as apiLogin, refreshAccessToken } from "../api/battery";
+import { login as apiLogin, refreshSession, serverLogout } from "../api/battery";
 import { DEFAULT_BASE_URL } from "../config";
 import { clearAllLocalData } from "../storage/scanHistory";
 import { Project } from "../types";
@@ -62,6 +62,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    // Revoke the refresh token server-side first (best effort - an offline
+    // phone must still be able to sign out locally).
+    if (refreshToken) serverLogout(baseUrl, refreshToken).catch(() => undefined);
     setAccessToken(null);
     setRefreshToken(null);
     setProject(null);
@@ -73,7 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // project; never leave them behind for whoever uses the phone next.
       clearAllLocalData(),
     ]);
-  }, []);
+  }, [baseUrl, refreshToken]);
 
   const setBaseUrl = useCallback(
     async (url: string) => {
@@ -119,9 +122,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const run = (async () => {
       try {
-        const refreshed = await refreshAccessToken(baseUrl, refreshToken);
+        // Refresh tokens rotate: persist the new one, the old one is now dead.
+        const refreshed = await refreshSession(baseUrl, refreshToken);
         setAccessToken(refreshed.access);
-        await SecureStore.setItemAsync(KEYS.accessToken, refreshed.access);
+        setRefreshToken(refreshed.refresh);
+        await Promise.all([
+          SecureStore.setItemAsync(KEYS.accessToken, refreshed.access),
+          SecureStore.setItemAsync(KEYS.refreshToken, refreshed.refresh),
+        ]);
         return refreshed.access;
       } catch (err) {
         // Refresh token expired/revoked (14 days, or account disabled): the

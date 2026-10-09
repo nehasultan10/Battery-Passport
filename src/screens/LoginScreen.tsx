@@ -45,7 +45,7 @@ export default function LoginScreen({ navigation }: Props) {
     >
       <View style={styles.content}>
         <Text style={styles.title}>Battery Passport</Text>
-        <Text style={styles.subtitle}>Sign in with your Voltrack account</Text>
+        <Text style={styles.subtitle}>Sign in with your Battery Passport account</Text>
 
         <TextInput
           style={styles.input}

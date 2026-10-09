@@ -22,6 +22,7 @@ export const PASSPORT_SECTIONS: PassportSection[] = [
       "manufacturing_date",
       "manufacturing_batch",
       "manufacturing_place",
+      "battery_serial_number",
       "battery_passport_id",
       "battery_identification_code",
       "responsible_economic_operator_id",

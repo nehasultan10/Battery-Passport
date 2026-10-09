@@ -9,7 +9,6 @@ import ProjectPickerScreen from "../screens/ProjectPickerScreen";
 import ScanHistoryScreen from "../screens/ScanHistoryScreen";
 import ScannerScreen from "../screens/ScannerScreen";
 import SettingsScreen from "../screens/SettingsScreen";
-import UsageHistoryScreen from "../screens/UsageHistoryScreen";
 import { RootStackParamList } from "./types";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -53,7 +52,6 @@ export default function RootNavigator() {
           <Stack.Screen name="Scanner" component={ScannerScreen} options={{ headerShown: false }} />
           <Stack.Screen name="PassportDetail" component={PassportDetailScreen} options={{ title: "Battery Passport" }} />
           <Stack.Screen name="MapBattery" component={MapBatteryScreen} options={{ title: "Map Battery" }} />
-          <Stack.Screen name="UsageHistory" component={UsageHistoryScreen} options={{ title: "Usage History" }} />
           <Stack.Screen name="ScanHistory" component={ScanHistoryScreen} options={{ title: "Scan History" }} />
           <Stack.Screen name="ProjectPicker" component={ProjectPickerScreen} options={{ title: "Select Project" }} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Settings" }} />
