@@ -114,3 +114,87 @@ class ApiTests(TestCase):
                      {"registration_number": " ", "pack_slot": "a", "serial": "EVE12345"}):
             self.assertEqual(post(self.client, "/api/ultratech/mappings/", body, self.tokens["access"]).status_code, 400)
         bc.assign_serial.assert_not_called()
+
+
+class BatteryClientTests(TestCase):
+    """The upstream client against a fake battery-passport service (no network)."""
+
+    ROWS = {
+        "MH40DC2629": {"registration_number": "MH40DC2629", "depot": "NAGPUR", "battery_pack_a": "A00801",
+                       "battery_pack_b": "           A00807", "battery_pack_c": None},
+        "MH40DC2622": {"registration_number": "MH40DC2622", "depot": "NAGPUR", "battery_pack_a": None,
+                       "battery_pack_b": None, "battery_pack_c": None},
+        "MH12AB1234": {"registration_number": "MH12AB1234", "depot": "UMT", "battery_pack_a": "U1", "battery_pack_b": None,
+                       "battery_pack_c": None},
+    }
+
+    def setUp(self):
+        from django.test import override_settings
+        cache.clear()
+        self.calls = []
+        o = override_settings(BATTERY_API_BASE_URL="http://up/api/v1", BATTERY_API_KEY="k")
+        o.enable()
+        self.addCleanup(o.disable)
+        p = mock.patch("passports.battery_api.requests.request", side_effect=self.fake)
+        p.start()
+        self.addCleanup(p.stop)
+        from passports.battery_api import BatteryApiClient
+        self.c = BatteryApiClient()
+
+    def fake(self, method, url, headers=None, params=None, json=None, timeout=None):
+        self.calls.append((method, url, headers, params, json))
+        resp = mock.Mock()
+        resp.status_code, resp.json.return_value = 200, {}
+        if method == "PATCH":
+            self.ROWS_ = getattr(self, "ROWS_", {k: dict(v) for k, v in self.ROWS.items()})
+            self.ROWS_[url.rsplit("/", 1)[1]].update(json)
+            return resp
+        rows = getattr(self, "ROWS_", self.ROWS)
+        reg = (params or {}).get("registration_number")
+        data = [dict(v) for v in rows.values()
+                if (not params.get("depot") or v["depot"] == params["depot"]) and (not reg or v["registration_number"] == reg.upper())]
+        resp.json.return_value = {"data": data, "count": len(data), "total": len(data)}
+        return resp
+
+    def test_sends_api_key_header(self):
+        self.c.resolve_serial("NAGPUR", "A00801")
+        self.assertEqual(self.calls[0][2]["x-api-key"], "k")
+
+    def test_resolve_matches_padded_pack_case_insensitively_and_scopes_to_depot(self):
+        self.assertEqual(self.c.resolve_serial("NAGPUR", "a00807")["registration_number"], "MH40DC2629")
+        self.assertIsNone(self.c.resolve_serial("NAGPUR", "U1"))
+
+    def test_assign_to_free_slot_patches_only_that_pack(self):
+        self.c.assign_serial("NAGPUR", {"registration_number": "mh40dc2622", "pack_slot": "a", "serial": "NEW123"})
+        patches = [x for x in self.calls if x[0] == "PATCH"]
+        self.assertEqual([(p[1], p[4]) for p in patches], [("http://up/api/v1/battery-passport/MH40DC2622", {"battery_pack_a": "NEW123"})])
+
+    def test_assign_conflicts_need_force(self):
+        with self.assertRaises(BatteryApiError) as e:
+            self.c.assign_serial("NAGPUR", {"registration_number": "MH40DC2622", "pack_slot": "a", "serial": "A00801"})
+        self.assertEqual((e.exception.status, e.exception.code), (409, "SERIAL_ON_OTHER_VEHICLE"))
+        with self.assertRaises(BatteryApiError) as e:
+            self.c.assign_serial("NAGPUR", {"registration_number": "MH40DC2629", "pack_slot": "a", "serial": "NEW123"})
+        self.assertEqual(e.exception.code, "SLOT_TAKEN")
+        self.assertFalse([x for x in self.calls if x[0] == "PATCH"])
+
+    def test_force_releases_old_holder_then_assigns(self):
+        self.c.assign_serial("NAGPUR", {"registration_number": "MH40DC2622", "pack_slot": "a", "serial": "A00801", "force": True})
+        self.assertEqual([(p[1][-10:], p[4]) for p in self.calls if p[0] == "PATCH"],
+                         [("MH40DC2629", {"battery_pack_a": None}), ("MH40DC2622", {"battery_pack_a": "A00801"})])
+
+    def test_force_cannot_take_serial_from_another_depot(self):
+        with self.assertRaises(BatteryApiError) as e:
+            self.c.assign_serial("NAGPUR", {"registration_number": "MH40DC2622", "pack_slot": "a", "serial": "U1", "force": True})
+        self.assertEqual(e.exception.status, 409)
+
+    def test_assign_to_vehicle_outside_depot_is_404(self):
+        with self.assertRaises(BatteryApiError) as e:
+            self.c.assign_serial("NAGPUR", {"registration_number": "MH12AB1234", "pack_slot": "b", "serial": "X123"})
+        self.assertEqual(e.exception.status, 404)
+
+    def test_unconfigured_is_502(self):
+        from django.test import override_settings
+        with override_settings(BATTERY_API_KEY=""), self.assertRaises(BatteryApiError) as e:
+            self.c.search_vehicles("NAGPUR", "MH")
+        self.assertEqual(e.exception.status, 502)

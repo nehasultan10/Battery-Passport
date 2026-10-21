@@ -1,4 +1,4 @@
-// The Battery Passport backend (battery-passport-api) - its own server, users and
+// The Battery Passport backend (the backend/ folder in this repo) - its own server, users and
 // database, separate from Voltrack and the battery data API. Overridable in-app (Settings screen) for
 // local/dev/ngrok use; stored in SecureStore, not hardcoded.
 export const DEFAULT_BASE_URL = "https://passport.transvolt.org";
