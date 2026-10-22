@@ -9,6 +9,7 @@ is stored in this project's database.
 Endpoints used (base URL ends in /api/v1):
   GET   /battery-passport?depot=&view=summary|full&limit=&offset=      (list, paged)
   GET   /battery-passport/{registration_number}                        (one full record -> {"data": {...}})
+  POST  /battery-passport                                              (create one record)
   PATCH /battery-passport/{registration_number}   (body: battery_pack_a|b|c)
 
 Upstream quirks this client works around:
@@ -51,7 +52,12 @@ def _clean(vehicle):
 def _detail_of(body):
     detail = body.get("detail") if isinstance(body, dict) else None
     if isinstance(detail, list):  # request-validation errors
-        detail = "; ".join(str(d.get("msg", d)) if isinstance(d, dict) else str(d) for d in detail)
+        def one(d):
+            if not isinstance(d, dict):
+                return str(d)
+            loc = [str(x) for x in d.get("loc", []) if x not in ("body", "query")]
+            return f"{loc[-1]}: {d.get('msg', d)}" if loc else str(d.get("msg", d))
+        detail = "; ".join(one(d) for d in detail)
     return detail
 
 
@@ -128,12 +134,44 @@ class BatteryApiClient:
         return [v for v in self._list(depot) if q in _norm(v.get("registration_number"))][:25]
 
     def resolve_serial(self, depot, serial, acting_user=None):
-        """The vehicle a scanned serial (or passport ID) is on within the depot, or None."""
+        """The vehicle a scanned serial, passport ID or registration number is on within the depot, or None."""
         wanted = _norm(serial)
         for v in self._list(depot):
             if wanted in {_norm(v.get(f)) for f in (*PACK_FIELDS.values(), "battery_passport_id")} - {""}:
                 return self.get_vehicle(depot, v["registration_number"])
-        return None
+        return self.get_vehicle(depot, serial)  # opened from the passports list: by plate
+
+    def list_vehicles(self, depot, q="", status="", limit=50, offset=0):
+        """One page of the depot's passports (summary view) and the total matching, newest-updated first."""
+        rows = self._list(depot)
+        status = status.strip().upper()
+        if status:
+            rows = [v for v in rows if _norm(v.get("status")) == status]
+        q = q.strip().upper()
+        if q:
+            keys = ("registration_number", "chassis_no", "model", "battery_passport_id", *PACK_FIELDS.values())
+            rows = [v for v in rows if any(q in _norm(v.get(k)) for k in keys)]
+        return rows[offset:offset + limit], len(rows)
+
+    def create_vehicle(self, depot, fields):
+        """Create a passport in the depot. The depot is forced; pack serials must not be on any vehicle."""
+        fields = {k: (v.strip() if isinstance(v, str) else v) for k, v in fields.items()}
+        fields = {k: v for k, v in fields.items() if v not in (None, "")}
+        fields["registration_number"] = fields.get("registration_number", "").upper()
+        fields["depot"] = depot
+        serials = [(f, fields[f]) for f in PACK_FIELDS.values() if f in fields and _norm(fields[f]) not in ("", "N/A")]
+        if len({_norm(s) for _, s in serials}) < len(serials):
+            raise BatteryApiError(400, "The same serial is entered for more than one pack slot.")
+        taken = {_norm(v.get(f)): v for v in self._list(None, fresh=True) for f in PACK_FIELDS.values()}
+        for _, serial in serials:
+            if _norm(serial) in taken:
+                raise BatteryApiError(
+                    409, f"{serial} is already on {taken[_norm(serial)]['registration_number']}.", "SERIAL_ON_OTHER_VEHICLE")
+        r = self._request("POST", PASSPORT_PATH, json=fields)
+        if r.status_code not in (200, 201):
+            self._raise_for(r)
+        cache.delete_many([self._list_key(None), self._list_key(depot)])
+        return self.get_vehicle(depot, fields["registration_number"]) or _clean(self._body(r).get("data", fields))
 
     # ── writes ───────────────────────────────────────────────────────────────
     def _patch(self, vehicle, fields):

@@ -150,6 +150,14 @@ class BatteryClientTests(TestCase):
             self.ROWS_[url.rsplit("/", 1)[1]].update(json)
             return resp
         rows = getattr(self, "ROWS_", self.ROWS)
+        if method == "POST":
+            self.ROWS_ = getattr(self, "ROWS_", {k: dict(v) for k, v in self.ROWS.items()})
+            if json["registration_number"] in self.ROWS_:
+                resp.status_code, resp.json.return_value = 409, {"detail": "already exists"}
+            else:
+                self.ROWS_[json["registration_number"]] = dict(json)
+                resp.status_code = 201
+            return resp
         if not url.endswith("/battery-passport"):  # GET one: /battery-passport/{reg}
             row = rows.get(url.rsplit("/", 1)[1].upper())
             resp.status_code = 200 if row else 404
@@ -175,6 +183,30 @@ class BatteryClientTests(TestCase):
         self.assertTrue(self.calls[0][1].endswith("/battery-passport/mh40dc2629"))
         self.assertIsNone(self.c.get_vehicle("NAGPUR", "MH12AB1234"))  # other depot
         self.assertIsNone(self.c.get_vehicle("NAGPUR", "NOPE000000"))  # 404
+
+    def test_list_vehicles_filters_and_pages(self):
+        rows, total = self.c.list_vehicles("NAGPUR")
+        self.assertEqual((len(rows), total), (2, 2))
+        rows, total = self.c.list_vehicles("NAGPUR", q="a00807")
+        self.assertEqual([r["registration_number"] for r in rows], ["MH40DC2629"])
+        rows, total = self.c.list_vehicles("NAGPUR", limit=1, offset=1)
+        self.assertEqual((len(rows), total), (1, 2))
+
+    def test_resolve_by_registration_number(self):
+        self.assertEqual(self.c.resolve_serial("NAGPUR", "mh40dc2622")["registration_number"], "MH40DC2622")
+
+    def test_create_forces_depot_and_blocks_taken_serial(self):
+        v = self.c.create_vehicle("NAGPUR", {"registration_number": "mh40zz0001", "model": " M ", "chemistry": "",
+                                              "battery_pack_a": "FRESH1"})
+        self.assertEqual(v["registration_number"], "MH40ZZ0001")
+        post = [x for x in self.calls if x[0] == "POST"][0]
+        self.assertEqual(post[4], {"registration_number": "MH40ZZ0001", "model": "M", "battery_pack_a": "FRESH1", "depot": "NAGPUR"})
+        with self.assertRaises(BatteryApiError) as e:
+            self.c.create_vehicle("NAGPUR", {"registration_number": "MH40ZZ0002", "battery_pack_a": "a00801"})
+        self.assertEqual(e.exception.status, 409)
+        with self.assertRaises(BatteryApiError) as e:
+            self.c.create_vehicle("NAGPUR", {"registration_number": "MH40DC2629"})
+        self.assertEqual(e.exception.status, 409)
 
     def test_assign_to_free_slot_patches_only_that_pack(self):
         self.c.assign_serial("NAGPUR", {"registration_number": "mh40dc2622", "pack_slot": "a", "serial": "NEW123"})

@@ -9,7 +9,8 @@ from passports import auth as tokens
 from passports.battery_api import BatteryApiError, client
 from passports.models import Project, RefreshToken
 from passports.schemas import (
-    ErrorOut, LoginIn, MappingIn, MeOut, ProjectOut, RefreshIn, ScanOut, TokenPairOut,
+    ErrorOut, LoginIn, MappingIn, MeOut, PassportCreateIn, PassportListOut, ProjectOut, RefreshIn, ScanOut,
+    TokenPairOut,
 )
 
 api = NinjaAPI(title="Battery Passport API", auth=tokens.JWTAuth(), urls_namespace="passport")
@@ -149,3 +150,35 @@ def create_mapping(request, project_slug: str, payload: MappingIn):
     except BatteryApiError as exc:
         return _upstream_error(exc)
     return 201, {"serial": serial, "vehicle": vehicle}
+
+
+@api.get("/{project_slug}/passports/", response={200: PassportListOut, 403: ErrorOut, 502: ErrorOut})
+def passports(request, project_slug: str, q: str = "", status: str = "", limit: int = 50, offset: int = 0):
+    """Paged list of the project's depot passports, optionally filtered by text and status."""
+    project = _project_for(request, project_slug)
+    if not project:
+        return NO_ACCESS
+    limit, offset = max(1, min(limit, 200)), max(0, offset)
+    try:
+        rows, total = client.list_vehicles(project.depot, q, status, limit, offset)
+    except BatteryApiError as exc:
+        return _upstream_error(exc)
+    return 200, {"data": rows, "total": total, "limit": limit, "offset": offset}
+
+
+@api.post("/{project_slug}/passports/", response={201: ScanOut, 400: ErrorOut, 403: ErrorOut, 409: ErrorOut, 502: ErrorOut})
+def create_passport(request, project_slug: str, payload: PassportCreateIn):
+    """Create a passport (one per registration number) in the project's depot."""
+    project = _project_for(request, project_slug)
+    if not project:
+        return NO_ACCESS
+    fields = payload.dict(exclude_none=True)
+    registration = fields.get("registration_number", "").replace(" ", "").upper()
+    if len(registration) < 6:
+        return 400, {"detail": "Enter the full vehicle registration number, e.g. MH12AB1234."}
+    fields["registration_number"] = registration
+    try:
+        vehicle = client.create_vehicle(project.depot, fields)
+    except BatteryApiError as exc:
+        return _upstream_error(exc)
+    return 201, {"serial": registration, "vehicle": vehicle}

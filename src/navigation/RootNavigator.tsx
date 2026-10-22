@@ -5,10 +5,11 @@ import { useAuth } from "../auth/AuthContext";
 import HomeScreen from "../screens/HomeScreen";
 import LoginScreen from "../screens/LoginScreen";
 import MapBatteryScreen from "../screens/MapBatteryScreen";
+import CreateRecordScreen from "../screens/CreateRecordScreen";
 import PassportDetailScreen from "../screens/PassportDetailScreen";
+import PassportsScreen from "../screens/PassportsScreen";
 import ProjectPickerScreen from "../screens/ProjectPickerScreen";
 import ScannerScreen from "../screens/ScannerScreen";
-import SettingsScreen from "../screens/SettingsScreen";
 import { RootStackParamList } from "./types";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -42,16 +43,16 @@ export default function RootNavigator() {
       ) : !hasProject ? (
         <>
           <Stack.Screen name="ProjectPicker" component={ProjectPickerScreen} options={{ title: "Select Project" }} />
-          <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Settings" }} />
         </>
       ) : (
         <>
           <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Passports" component={PassportsScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="CreateRecord" component={CreateRecordScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Scanner" component={ScannerScreen} options={{ headerShown: false, animation: "fade" }} />
           <Stack.Screen name="PassportDetail" component={PassportDetailScreen} options={{ title: "Battery Passport" }} />
           <Stack.Screen name="MapBattery" component={MapBatteryScreen} options={{ title: "Map Battery" }} />
           <Stack.Screen name="ProjectPicker" component={ProjectPickerScreen} options={{ title: "Select Project" }} />
-          <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Settings" }} />
         </>
       )}
     </Stack.Navigator>

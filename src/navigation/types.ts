@@ -5,5 +5,6 @@ export type RootStackParamList = {
   Scanner: undefined;
   PassportDetail: { code: string };
   MapBattery: { code: string };
-  Settings: undefined;
+  Passports: undefined;
+  CreateRecord: undefined;
 };

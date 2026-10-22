@@ -1,5 +1,12 @@
 import { API_PREFIX } from "../config";
-import { AssignPackPayload, BatteryPassport, Project, TokenPair } from "../types";
+import {
+  AssignPackPayload,
+  BatteryPassport,
+  NewPassportPayload,
+  PassportListResponse,
+  Project,
+  TokenPair,
+} from "../types";
 import { ApiError, apiRequest, buildAuthUrl, buildUrl } from "./client";
 
 export async function login(baseUrl: string, username: string, password: string): Promise<TokenPair> {
@@ -73,6 +80,37 @@ export async function assignPack(
 ): Promise<BatteryPassport> {
   return toPassport(
     await apiRequest<ScanResponse>(buildUrl(baseUrl, projectSlug, "/mappings/"), {
+      method: "POST",
+      accessToken,
+      body: payload,
+    })
+  );
+}
+
+/** One page of the selected project's passports, optionally filtered by search text and status. */
+export async function listPassports(
+  baseUrl: string,
+  projectSlug: string,
+  accessToken: string,
+  params: { q?: string; status?: string; limit: number; offset: number }
+): Promise<PassportListResponse> {
+  const query = [`limit=${params.limit}`, `offset=${params.offset}`];
+  if (params.q) query.push(`q=${encodeURIComponent(params.q)}`);
+  if (params.status) query.push(`status=${encodeURIComponent(params.status)}`);
+  return apiRequest<PassportListResponse>(buildUrl(baseUrl, projectSlug, `/passports/?${query.join("&")}`), {
+    accessToken,
+  });
+}
+
+/** Creates a passport in the project's depot. Throws ApiError(409, ...) if the plate or a serial is already used. */
+export async function createPassport(
+  baseUrl: string,
+  projectSlug: string,
+  accessToken: string,
+  payload: NewPassportPayload
+): Promise<BatteryPassport> {
+  return toPassport(
+    await apiRequest<ScanResponse>(buildUrl(baseUrl, projectSlug, "/passports/"), {
       method: "POST",
       accessToken,
       body: payload,

@@ -41,3 +41,46 @@ export interface CachedPassport {
   passport: BatteryPassport;
   cachedAt: string;
 }
+
+// One row of the passports list (the battery data API's "summary" view).
+export interface PassportListItem {
+  id?: number;
+  registration_number: string;
+  chassis_no: string | null;
+  model: string | null;
+  depot: string | null;
+  status: string | null;
+  battery_pack_a: string | null;
+  battery_pack_b: string | null;
+  battery_pack_c: string | null;
+  [field: string]: unknown;
+}
+
+export interface PassportListResponse {
+  data: PassportListItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+// Everything is text; the server (and the battery data API behind it) validates numbers and dates.
+export interface NewPassportPayload {
+  registration_number: string;
+  status?: string;
+  battery_category?: string;
+  chassis_no?: string;
+  model?: string;
+  manufacturer?: string;
+  chemistry?: string;
+  battery_pack_a?: string;
+  battery_pack_b?: string;
+  battery_pack_c?: string;
+  manufacturing_date?: string;
+  manufacturing_batch?: string;
+  manufacturing_place?: string;
+  nominal_voltage_v?: string;
+  nominal_capacity_ah?: string;
+  nominal_energy_kwh?: string;
+  usable_energy_kwh?: string;
+  battery_weight_kg?: string;
+}

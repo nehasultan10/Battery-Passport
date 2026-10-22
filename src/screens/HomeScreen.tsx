@@ -2,8 +2,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import React, { useCallback, useState } from "react";
 import { FlatList, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../auth/AuthContext";
+import AppShell from "../components/AppShell";
 import { RootStackParamList } from "../navigation/types";
 import { looksLikeSerial } from "../scanCode";
 import { getScanHistory } from "../storage/scanHistory";
@@ -12,7 +11,6 @@ import { ScanHistoryEntry } from "../types";
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
 export default function HomeScreen({ navigation }: Props) {
-  const auth = useAuth();
   const [entries, setEntries] = useState<ScanHistoryEntry[]>([]);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +24,7 @@ export default function HomeScreen({ navigation }: Props) {
   const search = () => {
     const code = query.trim();
     if (!looksLikeSerial(code)) {
-      setError("Enter a pack serial or passport ID (at least 3 letters or digits).");
+      setError("Enter a pack serial, passport ID or registration number (at least 3 letters or digits).");
       return;
     }
     setError(null);
@@ -36,23 +34,11 @@ export default function HomeScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.greeting}>Battery Passport</Text>
-          <TouchableOpacity onPress={() => navigation.navigate("ProjectPicker")}>
-            <Text style={styles.project}>{auth.project?.name ?? "No project"}  ▾</Text>
-          </TouchableOpacity>
-        </View>
-        <TouchableOpacity style={styles.settingsButton} onPress={() => navigation.navigate("Settings")}>
-          <Text style={styles.settingsText}>Settings</Text>
-        </TouchableOpacity>
-      </View>
-
+    <AppShell title="Home" active="Home">
       <View style={styles.searchRow}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search pack serial or passport ID"
+          placeholder="Search serial, passport ID or registration"
           placeholderTextColor="#94a3b8"
           value={query}
           onChangeText={(t) => {
@@ -100,24 +86,11 @@ export default function HomeScreen({ navigation }: Props) {
         <Text style={styles.fabIcon}>▣</Text>
         <Text style={styles.fabText}>Scan</Text>
       </TouchableOpacity>
-    </SafeAreaView>
+    </AppShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f1f5f9" },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#0f172a",
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 18,
-  },
-  greeting: { color: "#fff", fontSize: 22, fontWeight: "700" },
-  project: { color: "#93c5fd", fontSize: 14, marginTop: 4 },
-  settingsButton: { backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
-  settingsText: { color: "#fff", fontSize: 13, fontWeight: "600" },
   searchRow: { flexDirection: "row", gap: 8, paddingHorizontal: 16, marginTop: 16 },
   searchInput: {
     flex: 1,
