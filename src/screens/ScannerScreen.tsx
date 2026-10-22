@@ -8,23 +8,18 @@ import {
   Platform,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../auth/AuthContext";
 import { RootStackParamList } from "../navigation/types";
 import { extractScanCode } from "../scanCode";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Scanner">;
 
 export default function ScannerScreen({ navigation }: Props) {
-  const auth = useAuth();
   const [permission, requestPermission] = useCameraPermissions();
   const [torchOn, setTorchOn] = useState(false);
-  const [manualId, setManualId] = useState("");
-  const [showManualEntry, setShowManualEntry] = useState(false);
   const isFocused = useIsFocused();
   const [hint, setHint] = useState<string | null>(null);
   const lastScanRef = useRef<{ id: string; at: number } | null>(null);
@@ -47,7 +42,7 @@ export default function ScannerScreen({ navigation }: Props) {
       const trimmed = code.trim();
       if (!trimmed || lockedRef.current) return;
       lockedRef.current = true;
-      navigation.navigate("PassportDetail", { code: trimmed });
+      navigation.replace("PassportDetail", { code: trimmed });
     },
     [navigation]
   );
@@ -91,12 +86,9 @@ export default function ScannerScreen({ navigation }: Props) {
             <Text style={styles.buttonText}>Open Settings to Allow Camera</Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity style={styles.linkButton} onPress={() => setShowManualEntry(true)}>
-          <Text style={styles.linkText}>Enter passport ID manually instead</Text>
+        <TouchableOpacity style={styles.linkButton} onPress={() => navigation.goBack()}>
+          <Text style={styles.linkText}>Back</Text>
         </TouchableOpacity>
-        {showManualEntry && (
-          <ManualEntry value={manualId} onChange={setManualId} onSubmit={() => goToPassport(manualId)} />
-        )}
       </SafeAreaView>
     );
   }
@@ -118,18 +110,12 @@ export default function ScannerScreen({ navigation }: Props) {
       >
       <SafeAreaView style={styles.overlay} pointerEvents="box-none">
         <View style={styles.topBar}>
-          <Text style={styles.projectLabel}>{auth.project?.name ?? ""}</Text>
-          <View style={styles.topBarActions}>
-            <TouchableOpacity style={styles.iconButton} onPress={() => setTorchOn((v) => !v)}>
-              <Text style={styles.iconButtonText}>{torchOn ? "Torch On" : "Torch"}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.iconButton} onPress={() => navigation.navigate("ScanHistory")}>
-              <Text style={styles.iconButtonText}>History</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.iconButton} onPress={() => navigation.navigate("Settings")}>
-              <Text style={styles.iconButtonText}>Settings</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.iconButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.iconButtonText}>✕ Close</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconButton} onPress={() => setTorchOn((v) => !v)}>
+            <Text style={styles.iconButtonText}>{torchOn ? "Torch: On" : "Torch: Off"}</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.frameHint}>
@@ -137,46 +123,9 @@ export default function ScannerScreen({ navigation }: Props) {
           <Text style={styles.hintText}>{hint ?? "Point the camera at the battery's QR label"}</Text>
         </View>
 
-        <View style={styles.bottomBar}>
-          <TouchableOpacity style={styles.manualButton} onPress={() => setShowManualEntry((v) => !v)}>
-            <Text style={styles.manualButtonText}>
-              {showManualEntry ? "Hide manual entry" : "Damaged label? Enter ID manually"}
-            </Text>
-          </TouchableOpacity>
-          {showManualEntry && (
-            <ManualEntry value={manualId} onChange={setManualId} onSubmit={() => goToPassport(manualId)} />
-          )}
-        </View>
+        <View style={styles.bottomBar} />
       </SafeAreaView>
       </KeyboardAvoidingView>
-    </View>
-  );
-}
-
-function ManualEntry({
-  value,
-  onChange,
-  onSubmit,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onSubmit: () => void;
-}) {
-  return (
-    <View style={styles.manualEntryRow}>
-      <TextInput
-        style={styles.manualInput}
-        placeholder="Pack serial or passport ID"
-        placeholderTextColor="#94a3b8"
-        value={value}
-        onChangeText={onChange}
-        autoCapitalize="none"
-        autoCorrect={false}
-        onSubmitEditing={onSubmit}
-      />
-      <TouchableOpacity style={styles.manualSubmit} onPress={onSubmit}>
-        <Text style={styles.buttonText}>Go</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -218,23 +167,6 @@ const styles = StyleSheet.create({
   },
   hintText: { color: "#e2e8f0", marginTop: 16, fontSize: 13 },
   bottomBar: { paddingHorizontal: 16, paddingBottom: 24 },
-  manualButton: { alignItems: "center", paddingVertical: 8 },
-  manualButtonText: { color: "#93c5fd", fontSize: 13 },
-  manualEntryRow: { flexDirection: "row", marginTop: 8, gap: 8 },
-  manualInput: {
-    flex: 1,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    color: "#fff",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  manualSubmit: {
-    backgroundColor: "#2563eb",
-    borderRadius: 8,
-    paddingHorizontal: 18,
-    justifyContent: "center",
-  },
   permissionContainer: { flex: 1, backgroundColor: "#0f172a", justifyContent: "center", padding: 24 },
   permissionText: { color: "#fff", fontSize: 15, textAlign: "center", marginBottom: 20 },
   button: { backgroundColor: "#2563eb", borderRadius: 8, paddingVertical: 12, alignItems: "center" },

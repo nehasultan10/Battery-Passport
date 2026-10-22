@@ -69,7 +69,7 @@ export async function apiRequest<T>(url: string, options: RequestOptions = {}): 
     if (controller.signal.aborted) {
       throw new ApiError(0, "The server took too long to respond. Check your connection and try again.");
     }
-    throw new ApiError(0, "Network error — check your connection and the API base URL in Settings.");
+    throw new ApiError(0, "Network error — check your connection.");
   } finally {
     clearTimeout(timer);
   }
@@ -87,7 +87,7 @@ export async function apiRequest<T>(url: string, options: RequestOptions = {}): 
       const status = response.status === 404 ? 502 : response.status;
       const message =
         response.status === 404
-          ? "This server doesn't have the Battery Passport API at this address (404). Check the API Base URL in Settings."
+          ? "This server doesn't have the Battery Passport API at this address (404)."
           : `Request failed (${response.status}).`;
       return rejectWith(status, message);
     }
@@ -97,7 +97,7 @@ export async function apiRequest<T>(url: string, options: RequestOptions = {}): 
   // A 2xx that isn't JSON (wrong URL, captive portal, login-page redirect)
   // must not be returned as if it were data.
   if (text && data === null) {
-    throw new ApiError(502, "Unexpected response from the server (not JSON). Check the API Base URL in Settings.");
+    throw new ApiError(502, "Unexpected response from the server (not JSON).");
   }
 
   return data as T;

@@ -1,7 +1,10 @@
-// The Battery Passport backend (the backend/ folder in this repo) - its own server, users and
-// database, separate from Voltrack and the battery data API. Overridable in-app (Settings screen) for
-// local/dev/ngrok use; stored in SecureStore, not hardcoded.
-export const DEFAULT_BASE_URL = "https://passport.transvolt.org";
+// The Battery Passport backend (the backend/ folder in this repo). The URL is not user-configurable:
+// it is read from EXPO_PUBLIC_API_BASE_URL in the .env file at build/start time (see .env.example).
+const raw = process.env.EXPO_PUBLIC_API_BASE_URL;
+if (!raw) {
+  throw new Error("EXPO_PUBLIC_API_BASE_URL is not set. Copy .env.example to .env and set it.");
+}
+export const BASE_URL = raw.trim().replace(/\/+$/, "");
 
 // Project-scoped routes live under /api/<project-slug>/..., like the web app's
 // /<project>/... prefix; login, refresh, logout and the project list are

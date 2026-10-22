@@ -16,7 +16,7 @@ import { RootStackParamList } from "../navigation/types";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Login">;
 
-export default function LoginScreen({ navigation }: Props) {
+export default function LoginScreen(_props: Props) {
   const auth = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -50,6 +50,7 @@ export default function LoginScreen({ navigation }: Props) {
         <TextInput
           style={styles.input}
           placeholder="Username"
+          placeholderTextColor="#94a3b8"
           value={username}
           onChangeText={setUsername}
           autoCapitalize="none"
@@ -58,6 +59,7 @@ export default function LoginScreen({ navigation }: Props) {
         <TextInput
           style={styles.input}
           placeholder="Password"
+          placeholderTextColor="#94a3b8"
           value={password}
           onChangeText={setPassword}
           secureTextEntry
@@ -72,10 +74,6 @@ export default function LoginScreen({ navigation }: Props) {
           disabled={submitting}
         >
           {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign In</Text>}
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.linkButton} onPress={() => navigation.navigate("Settings")}>
-          <Text style={styles.linkText}>API settings</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -106,6 +104,4 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
-  linkButton: { marginTop: 20, alignItems: "center" },
-  linkText: { color: "#60a5fa", fontSize: 14 },
 });

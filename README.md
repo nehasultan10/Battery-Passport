@@ -13,9 +13,9 @@ npx expo start
 
 Scan the QR with Expo Go (Android/iOS), or press `a` / `i` for an emulator.
 
-**The backend must be running the `passport` branch of `voltrack`** (`battery/api.py`, `battery/auth.py`). That branch is not merged or deployed yet: `https://voltrack.transvolt.org` currently answers every battery-API call with an HTML 404, so the default URL cannot work until it is. Until then run that branch yourself and point the app at it (your computer's LAN IP, e.g. `http://192.168.1.20:8000`, with the phone on the same Wi-Fi - or an ngrok URL). In Settings, **Test connection** tells you whether the address actually serves the Battery Passport API.
+**Configuration is env-only.** Copy `.env.example` to `.env` and set `EXPO_PUBLIC_API_BASE_URL` (the app has no URL setting; restart Expo after changing it). The backend reads `backend/.env` (see `backend/.env.example`) for `DATABASE_URL`, `DJANGO_SECRET_KEY`, `BATTERY_API_BASE_URL` and `BATTERY_API_KEY`.
 
-On first launch: **Settings** to point the app at your Voltrack server (defaults to production; use your LAN IP or ngrok URL for a local dev backend), then sign in with a normal Voltrack account.
+On first launch, sign in with a Battery Passport account (create one with `python manage.py createsuperuser` in `backend/`).
 
 ## How identity/auth works
 

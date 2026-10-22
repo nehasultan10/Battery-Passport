@@ -2,13 +2,12 @@ import * as SecureStore from "expo-secure-store";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "../api/client";
 import { login as apiLogin, refreshSession, serverLogout } from "../api/battery";
-import { DEFAULT_BASE_URL } from "../config";
+import { BASE_URL } from "../config";
 import { clearAllLocalData } from "../storage/scanHistory";
 import { Project } from "../types";
 
 // SecureStore keys may only contain alphanumerics, ".", "-" and "_" — no ":".
 const KEYS = {
-  baseUrl: "battery-passport.base-url",
   accessToken: "battery-passport.access-token",
   refreshToken: "battery-passport.refresh-token",
   project: "battery-passport.project",
@@ -20,8 +19,6 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   project: Project | null;
-  /** Saves a new server URL; if it differs while signed in, signs out (tokens belong to the old server). */
-  setBaseUrl: (url: string) => Promise<void>;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   selectProject: (project: Project) => Promise<void>;
@@ -33,7 +30,7 @@ const AuthContext = createContext<AuthState | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
-  const [baseUrl, setBaseUrlState] = useState(DEFAULT_BASE_URL);
+  const baseUrl = BASE_URL;
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [project, setProject] = useState<Project | null>(null);
@@ -41,13 +38,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const [storedBaseUrl, storedAccess, storedRefresh, storedProject] = await Promise.all([
-          SecureStore.getItemAsync(KEYS.baseUrl),
+        const [storedAccess, storedRefresh, storedProject] = await Promise.all([
           SecureStore.getItemAsync(KEYS.accessToken),
           SecureStore.getItemAsync(KEYS.refreshToken),
           SecureStore.getItemAsync(KEYS.project),
         ]);
-        if (storedBaseUrl) setBaseUrlState(storedBaseUrl);
         if (storedAccess) setAccessToken(storedAccess);
         if (storedRefresh) setRefreshToken(storedRefresh);
         if (storedProject) setProject(JSON.parse(storedProject));
@@ -77,17 +72,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearAllLocalData(),
     ]);
   }, [baseUrl, refreshToken]);
-
-  const setBaseUrl = useCallback(
-    async (url: string) => {
-      const trimmed = url.trim().replace(/\/+$/, "");
-      const changed = trimmed !== baseUrl;
-      setBaseUrlState(trimmed);
-      await SecureStore.setItemAsync(KEYS.baseUrl, trimmed);
-      if (changed && (accessToken || refreshToken)) await logout();
-    },
-    [baseUrl, accessToken, refreshToken, logout]
-  );
 
   const login = useCallback(
     async (username: string, password: string) => {
@@ -154,13 +138,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       accessToken,
       refreshToken,
       project,
-      setBaseUrl,
       login,
       logout,
       selectProject,
       ensureAccessToken,
     }),
-    [isLoading, baseUrl, accessToken, refreshToken, project, setBaseUrl, login, logout, selectProject, ensureAccessToken]
+    [isLoading, baseUrl, accessToken, refreshToken, project, login, logout, selectProject, ensureAccessToken]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

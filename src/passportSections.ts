@@ -148,6 +148,10 @@ export const PASSPORT_SECTIONS: PassportSection[] = [
       "temp_range_idle_upper_c",
     ],
   },
+  {
+    title: "Record",
+    fields: ["created_at", "updated_at"],
+  },
 ];
 
 // Fields a depot technician acts on immediately — shown above the accordion,
@@ -192,5 +196,18 @@ export function formatFieldValue(value: unknown): string {
   if (value === null || value === undefined || value === "") return "—";
   if (Array.isArray(value)) return value.length ? value.join(", ") : "—";
   if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "string") {
+    const text = value.trim();
+    // ISO timestamps from the API (e.g. 2026-03-10T16:54:25.968765+05:30) -> local date/time.
+    if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
+      const date = new Date(text);
+      if (!isNaN(date.getTime())) return date.toLocaleString();
+    }
+    // Enum values (IN_SERVICE) -> "In Service". Single words (LFP, EV) are left alone.
+    if (/^[A-Z]+(_[A-Z]+)+$/.test(text)) {
+      return text.split("_").map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(" ");
+    }
+    return text;
+  }
   return String(value);
 }

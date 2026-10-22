@@ -150,6 +150,11 @@ class BatteryClientTests(TestCase):
             self.ROWS_[url.rsplit("/", 1)[1]].update(json)
             return resp
         rows = getattr(self, "ROWS_", self.ROWS)
+        if not url.endswith("/battery-passport"):  # GET one: /battery-passport/{reg}
+            row = rows.get(url.rsplit("/", 1)[1].upper())
+            resp.status_code = 200 if row else 404
+            resp.json.return_value = {"data": dict(row)} if row else {"detail": "not found"}
+            return resp
         reg = (params or {}).get("registration_number")
         data = [dict(v) for v in rows.values()
                 if (not params.get("depot") or v["depot"] == params["depot"]) and (not reg or v["registration_number"] == reg.upper())]
@@ -163,6 +168,13 @@ class BatteryClientTests(TestCase):
     def test_resolve_matches_padded_pack_case_insensitively_and_scopes_to_depot(self):
         self.assertEqual(self.c.resolve_serial("NAGPUR", "a00807")["registration_number"], "MH40DC2629")
         self.assertIsNone(self.c.resolve_serial("NAGPUR", "U1"))
+
+    def test_get_vehicle_uses_single_record_endpoint_and_scopes_to_depot(self):
+        v = self.c.get_vehicle("NAGPUR", "mh40dc2629")
+        self.assertEqual(v["battery_pack_b"], "A00807")  # padding trimmed
+        self.assertTrue(self.calls[0][1].endswith("/battery-passport/mh40dc2629"))
+        self.assertIsNone(self.c.get_vehicle("NAGPUR", "MH12AB1234"))  # other depot
+        self.assertIsNone(self.c.get_vehicle("NAGPUR", "NOPE000000"))  # 404
 
     def test_assign_to_free_slot_patches_only_that_pack(self):
         self.c.assign_serial("NAGPUR", {"registration_number": "mh40dc2622", "pack_slot": "a", "serial": "NEW123"})

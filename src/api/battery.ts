@@ -79,19 +79,3 @@ export async function assignPack(
     })
   );
 }
-
-/**
- * Settings "Test connection": checks that baseUrl actually serves the Battery
- * Passport API (Ninja publishes its schema unauthenticated at /openapi.json).
- */
-export async function testConnection(baseUrl: string): Promise<{ ok: boolean; message: string }> {
-  try {
-    const schema = await apiRequest<{ paths?: Record<string, unknown> }>(`${baseUrl.replace(/\/+$/, "")}${API_PREFIX}/openapi.json`);
-    const hasLogin = !!schema && !!schema.paths && Object.keys(schema.paths).some((p) => p.includes("/auth/login"));
-    return hasLogin
-      ? { ok: true, message: "Connected — Battery Passport API found." }
-      : { ok: false, message: "Reached a server, but it doesn't expose the Battery Passport API." };
-  } catch (err) {
-    return { ok: false, message: err instanceof ApiError ? err.message : "Could not reach the server." };
-  }
-}

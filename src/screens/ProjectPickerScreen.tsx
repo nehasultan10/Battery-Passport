@@ -37,7 +37,7 @@ export default function ProjectPickerScreen({ navigation }: Props) {
     await auth.selectProject(project);
     // First selection: the navigator swaps to the Scanner group by itself.
     // Switching from Settings: we're already inside that group, so reset it.
-    if (switching) navigation.reset({ index: 0, routes: [{ name: "Scanner" }] });
+    if (switching) navigation.reset({ index: 0, routes: [{ name: "Home" }] });
   };
 
   if (loading) {

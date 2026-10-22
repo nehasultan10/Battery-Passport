@@ -2,11 +2,11 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import React from "react";
 import { ActivityIndicator, View } from "react-native";
 import { useAuth } from "../auth/AuthContext";
+import HomeScreen from "../screens/HomeScreen";
 import LoginScreen from "../screens/LoginScreen";
 import MapBatteryScreen from "../screens/MapBatteryScreen";
 import PassportDetailScreen from "../screens/PassportDetailScreen";
 import ProjectPickerScreen from "../screens/ProjectPickerScreen";
-import ScanHistoryScreen from "../screens/ScanHistoryScreen";
 import ScannerScreen from "../screens/ScannerScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 import { RootStackParamList } from "./types";
@@ -38,10 +38,7 @@ export default function RootNavigator() {
   return (
     <Stack.Navigator key={groupKey}>
       {!signedIn ? (
-        <>
-          <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Settings" }} />
-        </>
+        <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
       ) : !hasProject ? (
         <>
           <Stack.Screen name="ProjectPicker" component={ProjectPickerScreen} options={{ title: "Select Project" }} />
@@ -49,10 +46,10 @@ export default function RootNavigator() {
         </>
       ) : (
         <>
-          <Stack.Screen name="Scanner" component={ScannerScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Scanner" component={ScannerScreen} options={{ headerShown: false, animation: "fade" }} />
           <Stack.Screen name="PassportDetail" component={PassportDetailScreen} options={{ title: "Battery Passport" }} />
           <Stack.Screen name="MapBattery" component={MapBatteryScreen} options={{ title: "Map Battery" }} />
-          <Stack.Screen name="ScanHistory" component={ScanHistoryScreen} options={{ title: "Scan History" }} />
           <Stack.Screen name="ProjectPicker" component={ProjectPickerScreen} options={{ title: "Select Project" }} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Settings" }} />
         </>

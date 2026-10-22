@@ -7,7 +7,8 @@ sits in which pack slot of which vehicle, so nothing about vehicles or serials
 is stored in this project's database.
 
 Endpoints used (base URL ends in /api/v1):
-  GET   /battery-passport?depot=&view=summary|full&limit=&offset=&registration_number=
+  GET   /battery-passport?depot=&view=summary|full&limit=&offset=      (list, paged)
+  GET   /battery-passport/{registration_number}                        (one full record -> {"data": {...}})
   PATCH /battery-passport/{registration_number}   (body: battery_pack_a|b|c)
 
 Upstream quirks this client works around:
@@ -16,6 +17,8 @@ Upstream quirks this client works around:
     B/C are stored with stray leading spaces. So serial lookup and partial
     search list the depot (`view=summary`, a few hundred rows) and match here.
 """
+from urllib.parse import quote
+
 import requests
 from django.conf import settings
 from django.core.cache import cache
@@ -110,15 +113,14 @@ class BatteryApiClient:
 
     def get_vehicle(self, depot, registration_number):
         """Full passport for an exact registration number within the depot, or None."""
-        r = self._request("GET", PASSPORT_PATH, params={"registration_number": registration_number.strip()})
-        if r.status_code in (400, 422):  # not a full registration number
+        r = self._request("GET", f"{PASSPORT_PATH}/{quote(registration_number.strip(), safe='')}")
+        if r.status_code in (400, 404, 422):  # not a full registration number, or no such record
             return None
         if r.status_code != 200:
             self._raise_for(r)
-        wanted = registration_number.strip().upper()
-        for v in r.json()["data"]:
-            if _norm(v.get("registration_number")) == wanted and _norm(v.get("depot")) == _norm(depot):
-                return _clean(v)
+        vehicle = (r.json() or {}).get("data")
+        if isinstance(vehicle, dict) and _norm(vehicle.get("depot")) == _norm(depot):
+            return _clean(vehicle)
         return None
 
     def search_vehicles(self, depot, q, acting_user=None):
